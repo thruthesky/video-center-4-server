@@ -455,7 +455,7 @@ module.exports = exports = function(app, socketCallback) {
         });
 
         if (socketCallback) {
-            socketCallback(socket);
+            socketCallback(socket, io);
         }
     }
 };

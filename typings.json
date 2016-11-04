@@ -1,0 +1,9 @@
+{
+  "name": "rtcmulticonnection-v3",
+  "dependencies": {},
+  "globalDependencies": {
+    "extend": "registry:dt/extend#2.0.0+20160316155526",
+    "node": "registry:dt/node#6.0.0+20161019125345",
+    "socket.io": "registry:dt/socket.io#1.4.4+20160909205835"
+  }
+}

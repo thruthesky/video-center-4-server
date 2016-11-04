@@ -20,6 +20,8 @@ try {
     }
 } catch (e) {}
 
+    console.log("DEBUG >>> autoRebootServerOnFailure: ", autoRebootServerOnFailure);
+
 var server = require(isUseHTTPs ? 'https' : 'http'),
     url = require('url'),
     path = require('path'),
@@ -160,7 +162,12 @@ function runServer() {
         console.log('Server listening at ' + (isUseHTTPs ? 'https' : 'http') + '://' + addr.address + ':' + addr.port);
     });
 
-    require('./Signaling-Server.js')(app, function(socket) {
+    
+var vcs = require('./video-center.js');
+var vc = new vcs();
+
+
+    require('./Signaling-Server.js')(app, function(socket, io) {
         try {
             var params = socket.handshake.query;
 
@@ -182,6 +189,7 @@ function runServer() {
                 } catch (e) {}
             });
         } catch (e) {}
+        vc.listen( socket, io );
     });
 }
 
