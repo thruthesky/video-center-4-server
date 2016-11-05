@@ -103,7 +103,7 @@ class VideoCenterServer {
     private whiteboardClear( socket, data ) {
         let roomname = data.room_name;
 
-            this.io.sockets["in"]( roomname ).emit('whiteboard', data);
+            this.io.in( roomname ).emit('whiteboard', data);
             try{
                 delete this.whiteboard_line_history[roomname];                
             }
@@ -143,8 +143,8 @@ class VideoCenterServer {
     private disconnect ( socket:any ) : void { 
         var user = this.getUser( socket );
 
-        if ( user.room != Lobby ) this.io.sockets["in"]( Lobby ).emit('disconnect', user);
-        this.io.sockets["in"]( user.room ).emit('disconnect', user);
+        if ( user.room != Lobby ) this.io.in( Lobby ).emit('disconnect', user);
+        this.io.in( user.room ).emit('disconnect', user);
         this.io.sockets.emit('disconnect-private-message', user );
         this.leaveRoom( socket, () => console.log("You left and disconnect") );
         this.removeUser( socket.id );
@@ -234,7 +234,7 @@ class VideoCenterServer {
         var user = this.getUser( socket );
         console.log(user.name + ' leave the room: '+ user.room );     
         socket.leave( user.room );    
-        this.io.sockets["in"]( user.room ).emit('remove-user', user);
+        this.io.in( user.room ).emit('remove-user', user);
         if ( this.is_room_exist( user.room ) ) {
             // room exist...
             console.log("room exists. don't broadcast for room delete");
@@ -265,7 +265,7 @@ class VideoCenterServer {
     }
     private chatMessage ( socket: any, message: string, callback: any ) : void {
         let user = this.getUser( socket );
-        this.io.sockets["in"]( user.room ).emit('chatMessage', { message: message, name: user.name, room: user.room } );
+        this.io.in( user.room ).emit('chatMessage', { message: message, name: user.name, room: user.room } );
         callback( user );
     }
     private removeUser ( id: string ) : void {
@@ -297,7 +297,7 @@ class VideoCenterServer {
         let room: string = '';
 
         // @todo Case Z.
-        this.io.sockets["in"]( lobbyRoomName ).emit('join-room', user); // all the cases.
+        this.io.in( lobbyRoomName ).emit('join-room', user); // all the cases.
 
         if ( move_room ) { // from another. Create, Join but No refresh, no re-connect.
             if ( move_into_lobby ) { // from Lobby.
@@ -312,7 +312,7 @@ class VideoCenterServer {
                 room = newRoomname; // Case 1.6
             }
         }
-        if ( room ) this.io.sockets["in"]( room ).emit('join-room', user);
+        if ( room ) this.io.in( room ).emit('join-room', user);
 
     }
 
@@ -353,7 +353,7 @@ class VideoCenterServer {
             user: false
         };
         let o:any = extend( defaults, opts );        
-        var rooms = this.io.sockets.manager.rooms;       
+        var rooms = this.io.sockets.adapter.rooms;       
         var roomList = [];
         var room;
         var re;

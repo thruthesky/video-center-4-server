@@ -92,7 +92,7 @@ var VideoCenterServer = (function () {
     };
     VideoCenterServer.prototype.whiteboardClear = function (socket, data) {
         var roomname = data.room_name;
-        this.io.sockets["in"](roomname).emit('whiteboard', data);
+        this.io.in(roomname).emit('whiteboard', data);
         try {
             delete this.whiteboard_line_history[roomname];
         }
@@ -128,8 +128,8 @@ var VideoCenterServer = (function () {
     VideoCenterServer.prototype.disconnect = function (socket) {
         var user = this.getUser(socket);
         if (user.room != Lobby)
-            this.io.sockets["in"](Lobby).emit('disconnect', user);
-        this.io.sockets["in"](user.room).emit('disconnect', user);
+            this.io.in(Lobby).emit('disconnect', user);
+        this.io.in(user.room).emit('disconnect', user);
         this.io.sockets.emit('disconnect-private-message', user);
         this.leaveRoom(socket, function () { return console.log("You left and disconnect"); });
         this.removeUser(socket.id);
@@ -213,7 +213,7 @@ var VideoCenterServer = (function () {
         var user = this.getUser(socket);
         console.log(user.name + ' leave the room: ' + user.room);
         socket.leave(user.room);
-        this.io.sockets["in"](user.room).emit('remove-user', user);
+        this.io.in(user.room).emit('remove-user', user);
         if (this.is_room_exist(user.room)) {
             // room exist...
             console.log("room exists. don't broadcast for room delete");
@@ -242,7 +242,7 @@ var VideoCenterServer = (function () {
     };
     VideoCenterServer.prototype.chatMessage = function (socket, message, callback) {
         var user = this.getUser(socket);
-        this.io.sockets["in"](user.room).emit('chatMessage', { message: message, name: user.name, room: user.room });
+        this.io.in(user.room).emit('chatMessage', { message: message, name: user.name, room: user.room });
         callback(user);
     };
     VideoCenterServer.prototype.removeUser = function (id) {
@@ -268,7 +268,7 @@ var VideoCenterServer = (function () {
         var my_room = !!prevRoom || newRoomname == lobbyRoomName ? Lobby : newRoomname;
         var room = '';
         // @todo Case Z.
-        this.io.sockets["in"](lobbyRoomName).emit('join-room', user); // all the cases.
+        this.io.in(lobbyRoomName).emit('join-room', user); // all the cases.
         if (move_room) {
             if (move_into_lobby) {
                 room = newRoomname; // Case 4.
@@ -283,7 +283,7 @@ var VideoCenterServer = (function () {
             }
         }
         if (room)
-            this.io.sockets["in"](room).emit('join-room', user);
+            this.io.in(room).emit('join-room', user);
     };
     VideoCenterServer.prototype.userList = function (socket, roomname, callback) {
         if (roomname) {
@@ -321,7 +321,7 @@ var VideoCenterServer = (function () {
             user: false
         };
         var o = extend(defaults, opts);
-        var rooms = this.io.sockets.manager.rooms;
+        var rooms = this.io.sockets.adapter.rooms;
         var roomList = [];
         var room;
         var re;
