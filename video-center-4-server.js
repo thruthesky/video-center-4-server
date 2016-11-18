@@ -1,7 +1,7 @@
 // Muaz Khan      - www.MuazKhan.com
 // MIT License    - www.WebRTC-Experiment.com/licence
 // Documentation  - github.com/muaz-khan/RTCMultiConnection
-var isUseHTTPs = false && !(!!process.env.PORT || !!process.env.IP);
+var isUseHTTPs = true && !(!!process.env.PORT || !!process.env.IP);
 
 // user-guide: change port via "config.json"
 var port = process.env.PORT || 9001;
@@ -145,8 +145,10 @@ var app;
 
 if (isUseHTTPs) {
     var options = {
-        key: fs.readFileSync(path.join(__dirname, 'fake-keys/privatekey.pem')),
-        cert: fs.readFileSync(path.join(__dirname, 'fake-keys/certificate.pem'))
+        //key: fs.readFileSync(path.join(__dirname, 'fake-keys/privatekey.pem')),
+        //cert: fs.readFileSync(path.join(__dirname, 'fake-keys/certificate.pem'))
+        key: fs.readFileSync('ssl/videocenter/videocenter_co_kr.key'),
+        cert: fs.readFileSync('ssl/videocenter/videocenter_co_kr.crt-ca-bundle')
     };
     app = server.createServer(options, serverHandler);
 } else app = server.createServer(serverHandler);
