@@ -21,6 +21,7 @@ class VideoCenterServer {
     private io: any;
     private whiteboard_line_history :Array<any>;//All the whiteboard history will go here
     public users: User = <User>{};
+    public roomInitiators: any = {};
     
     constructor() {        
         console.log("VideoCenterServer::constructor() ...");
@@ -226,19 +227,64 @@ class VideoCenterServer {
      *      for instance, if a room is already created with the same roomname, we will send a failure message to user.
      */
     private createRoom ( socket: any, roomname: string, callback: any ) : void {
-        let user = this.getUser( socket );    
+        let user = this.getUser( socket );
         console.log( user.name + ' created and joined :' + roomname  );
+        this.roomInitiators[user.socket] = user;
         callback( roomname );           
     }
     private leaveRoom ( socket: any, callback: any ) : void {
-        var user = this.getUser( socket );
+        let user = this.getUser( socket );
+        let users = this.users;
+        let roomInitiators = this.roomInitiators;
+        let isInitiator:boolean = false;
+        let firstUser;
         console.log(user.name + ' leave the room: '+ user.room );     
         socket.leave( user.room );    
         this.io.in( user.room ).emit('remove-user', user);
         if ( this.is_room_exist( user.room ) ) {
             // room exist...
             console.log("room exists. don't broadcast for room delete");
-            callback();
+            // Check if the one who leave is the initiator
+            console.log("test initiate");
+            for ( let socket_id in roomInitiators ) {
+                let userinitiate = roomInitiators[socket_id];
+                console.log("initiator:",userinitiate);
+                if(userinitiate.socket == user.socket) {
+                    console.log("You are the initiator");
+                    isInitiator = true;
+                }
+                else {
+                    console.log("You are not the initiator");
+                    isInitiator = false;
+                }
+            }
+            //If he is the initiator then pass it to another user that is still inside the room
+            if(isInitiator){
+                console.log("Initiator");
+                //remove the old initiator
+                delete roomInitiators[user.socket];
+                //pick the first user that is still inside the room
+                for ( let socket_id in users ) {
+                    let otheruser = users[socket_id];
+                    if(!otheruser.room) continue;
+                    if(otheruser.room == user.room && otheruser.room != lobbyRoomName) {
+                    if(otheruser.socket != user.socket) {
+                        firstUser = otheruser;
+                        continue;
+                    }
+                    }
+                }
+                if(firstUser) {
+                    console.log("firstUser:",firstUser);
+                    socket.broadcast.to( firstUser.socket ).emit('you-are-new-owner', firstUser );
+                    roomInitiators[firstUser.socket] = firstUser; // shift ownership
+                }
+                callback();
+            }else {
+                console.log("Not Initiator");
+                callback();
+            }
+            
         }
         else if ( this.get_room_users( user.room ) ) {
             // room exists...
@@ -258,9 +304,9 @@ class VideoCenterServer {
     private chat_private_message ( socket: any, data: any, callback: any ) : void {
         let user = this.getUser( socket );
         //for sender
-        this.io.sockets.socket( socket.id ).emit('chat-private-message', { message: data.message, name: data.name, pmsocket: data.pmsocket } );
+        socket.broadcast.to.socket( socket.id ).emit('chat-private-message', { message: data.message, name: data.name, pmsocket: data.pmsocket } );
         //for receiver
-        this.io.sockets.socket( data.pmsocket ).emit('chat-private-message', { message: data.message, name: data.name, pmsocket: socket.id } );
+        socket.broadcast.to( data.pmsocket ).emit('chat-private-message', { message: data.message, name: data.name, pmsocket: socket.id } );
         callback( user );
     }
     private chatMessage ( socket: any, message: string, callback: any ) : void {
@@ -285,6 +331,15 @@ class VideoCenterServer {
         user.room = newRoomname;       // new room
 
         this.setUser( user );       // update new room on user
+        //Test if room exist
+        if ( this.is_room_exist( user.room )  ) {
+            // room exist...
+            console.log("room exists. don't broadcast for room delete");
+        }
+        else {
+            console.log("You are the initiator of the room");
+            if(user.room != lobbyRoomName ) this.roomInitiators[user.socket] = user;
+        }
         socket.join( newRoomname );
 
         if ( callback ) callback( newRoomname );
@@ -399,7 +454,7 @@ class VideoCenterServer {
         return re.length;
     }
     private get_room( roomname:any ) {
-        let rooms:any = this.io.sockets.manager.rooms;
+        let rooms:any = this.io.sockets.adapter.rooms;
         roomname = '/' + roomname;
         return rooms[roomname];
     }
