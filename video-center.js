@@ -5,7 +5,8 @@
 /// import fs = require('fs');
 /// import oo = require('socket.io');
 var extend = require('extend');
-var user_type = 'User';
+var user_participant_type = 'UserParticipant';
+var user_initiator_type = 'UserInitiator';
 var admin_type = 'Admin';
 var lobbyRoomName = 'Lobby';
 var Lobby = 'Lobby';
@@ -152,7 +153,7 @@ var VideoCenterServer = (function () {
         user.name = 'Anonymous';
         user.room = EmptyRoomname;
         user.socket = socket.id;
-        user.type = user_type;
+        user.type = user_participant_type;
         this.users[socket.id] = user;
         return this.users[socket.id];
     };
@@ -176,7 +177,7 @@ var VideoCenterServer = (function () {
     };
     VideoCenterServer.prototype.setClient = function (socket) {
         var user = this.getUser(socket);
-        user.type = user_type;
+        user.type = user_participant_type;
         return this.setUser(user);
     };
     VideoCenterServer.prototype.updateUsername = function (socket, username, callback) {
@@ -207,8 +208,10 @@ var VideoCenterServer = (function () {
      */
     VideoCenterServer.prototype.createRoom = function (socket, roomname, callback) {
         var user = this.getUser(socket);
-        console.log(user.name + ' created and joined :' + roomname);
+        user.type = user_initiator_type; // new user type
+        this.setUser(user); // update new type on user
         this.roomInitiators[user.socket] = user;
+        console.log(user.name + ' created and joined :' + roomname);
         callback(roomname);
     };
     VideoCenterServer.prototype.leaveRoom = function (socket, callback) {
@@ -241,6 +244,8 @@ var VideoCenterServer = (function () {
             if (isInitiator) {
                 console.log("Initiator");
                 //remove the old initiator
+                user.type = user_participant_type; // new user type
+                this.setUser(user); // update new type on user
                 delete roomInitiators[user.socket];
                 //pick the first user that is still inside the room
                 for (var socket_id in users) {
@@ -248,13 +253,15 @@ var VideoCenterServer = (function () {
                     if (!otheruser.room)
                         continue;
                     if (otheruser.room == user.room && otheruser.room != lobbyRoomName) {
-                        if (otheruser.socket != user.socket) {
+                        if (otheruser.socket != user.socket && otheruser.type != user_initiator_type) {
                             firstUser = otheruser;
                             continue;
                         }
                     }
                 }
                 if (firstUser) {
+                    firstUser.type = user_initiator_type; // set the new owner to initiator
+                    this.setUser(firstUser); // update new type of user
                     console.log("firstUser:", firstUser);
                     socket.broadcast.to(firstUser.socket).emit('you-are-new-owner', firstUser);
                     roomInitiators[firstUser.socket] = firstUser; // shift ownership
@@ -313,12 +320,15 @@ var VideoCenterServer = (function () {
         }
         else {
             console.log("You are the initiator of the room");
-            if (user.room != lobbyRoomName)
+            if (user.room != lobbyRoomName) {
+                user.type = user_initiator_type; // new user type
+                this.setUser(user); // update new type on user
                 this.roomInitiators[user.socket] = user;
+            }
         }
         socket.join(newRoomname);
         if (callback)
-            callback(newRoomname);
+            callback(user);
         var move_room = !!prevRoom; // He has prev room name. Meaning he was in room or lobby. He is moving into another room. he is not refreshing the browser.
         var move_into_lobby = prevRoom == lobbyRoomName; // He was in another room and he joins 'lobby'. He is not refreshing browser, nor re-connected.
         var visit = !prevRoom; // He access(visits) the chat page. He is not moving into room from other room. He may refresh browser, disconnected, or whatever.. he access the site again.
