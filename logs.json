@@ -1,1 +1,3 @@
-{}
+{
+	"Wed23Nov2016130204GMT": "{\n\t\"0\": \"close-entire-session\",\n\t\"1\": \"TypeError: Cannot read property 'connectedWith' of undefined\\n    at Socket.<anonymous> (C:\\\\xampp\\\\htdocs\\\\video-center-4-server\\\\Signaling-Server.js:216:63)\\n    at emitOne (events.js:96:13)\\n    at Socket.emit (events.js:188:7)\\n    at Socket.onevent (C:\\\\xampp\\\\htdocs\\\\video-center-4-server\\\\node_modules\\\\socket.io\\\\lib\\\\socket.js:348:8)\\n    at Socket.onpacket (C:\\\\xampp\\\\htdocs\\\\video-center-4-server\\\\node_modules\\\\socket.io\\\\lib\\\\socket.js:308:12)\\n    at C:\\\\xampp\\\\htdocs\\\\video-center-4-server\\\\node_modules\\\\socket.io\\\\lib\\\\client.js:195:16\\n    at _combinedTickCallback (internal/process/next_tick.js:67:7)\\n    at process._tickCallback (internal/process/next_tick.js:98:9)\"\n}"
+}

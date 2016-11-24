@@ -8,21 +8,19 @@ interface User {
     name: string;
     room: string;
     socket: string
-    type: string;//UserParticipant,UserInitiator,Admin
+    type: string;
 }
 
-const user_participant_type:string = 'UserParticipant';
-const user_initiator_type:string = 'UserInitiator';
+
 const admin_type:string = 'Admin';
+const participant_type:string = 'Participant';
 const lobbyRoomName = 'Lobby';
-const Lobby = 'Lobby';
 const EmptyRoomname = '';
 
 class VideoCenterServer {
     private io: any;
     private whiteboard_line_history :Array<any>;//All the whiteboard history will go here
     public users: User = <User>{};
-    public roomInitiators: any = {};
     
     constructor() {        
         console.log("VideoCenterServer::constructor() ...");
@@ -73,6 +71,10 @@ class VideoCenterServer {
         } );
         socket.on('room-cast', data => { 
             socket.broadcast.to( data.roomname ).emit('room-cast', data);
+        } );
+        socket.on('get-my-info', ( callback ) => {
+            let user = this.getUser( socket ); 
+            callback( user );
         } );
 
         
@@ -145,7 +147,7 @@ class VideoCenterServer {
     private disconnect ( socket:any ) : void { 
         var user = this.getUser( socket );
 
-        if ( user.room != Lobby ) this.io.in( Lobby ).emit('disconnect', user);
+        if ( user.room != lobbyRoomName ) this.io.in( lobbyRoomName ).emit('disconnect', user);
         this.io.in( user.room ).emit('disconnect', user);
         this.io.sockets.emit('disconnect-private-message', user );
         this.leaveRoom( socket, () => console.log("You left and disconnect") );
@@ -170,7 +172,7 @@ class VideoCenterServer {
         user.name = 'Anonymous';
         user.room = EmptyRoomname;
         user.socket = socket.id;
-        user.type = user_participant_type;
+        user.type = participant_type;
         this.users[ socket.id ] = user;         
         return this.users[ socket.id ];
     }
@@ -194,9 +196,9 @@ class VideoCenterServer {
         user.type = admin_type;
         return this.setUser( user );
     }
-    private setClient ( socket: any ) : User {
+    private setParticipant ( socket: any ) : User {
         let user = this.getUser( socket );
-        user.type = user_participant_type;
+        user.type = participant_type;
         return this.setUser( user );
     }
 
@@ -204,7 +206,7 @@ class VideoCenterServer {
         let user = this.getUser( socket );  
         let oldusername = user.name;
         user = this.setUsername( socket, username );  
-        this.setClient( socket );           
+        this.setUser( socket );           
         console.log(oldusername + " change it's name to "+username);
         console.log( user );
         callback( user );
@@ -229,71 +231,18 @@ class VideoCenterServer {
      */
     private createRoom ( socket: any, roomname: string, callback: any ) : void {
         let user = this.getUser( socket );
-        user.type = user_initiator_type;// new user type
-        this.setUser( user );// update new type on user
-        this.roomInitiators[user.socket] = user;
         console.log( user.name + ' created and joined :' + roomname  );
-        
         callback( roomname );           
     }
     private leaveRoom ( socket: any, callback: any ) : void {
         let user = this.getUser( socket );
-        let users = this.users;
-        let roomInitiators = this.roomInitiators;
-        let isInitiator:boolean = false;
-        let firstUser;
         console.log(user.name + ' leave the room: '+ user.room );     
         socket.leave( user.room );    
         this.io.in( user.room ).emit('remove-user', user);
         if ( this.is_room_exist( user.room ) ) {
             // room exist...
             console.log("room exists. don't broadcast for room delete");
-            // Check if the one who leave is the initiator
-            console.log("test initiate");
-            for ( let socket_id in roomInitiators ) {
-                let userinitiate = roomInitiators[socket_id];
-                console.log("initiator:",userinitiate);
-                if(userinitiate.socket == user.socket) {
-                    console.log("You are the initiator");
-                    isInitiator = true;
-                }
-                else {
-                    console.log("You are not the initiator");
-                    isInitiator = false;
-                }
-            }
-            //If he is the initiator then pass it to another user that is still inside the room
-            if(isInitiator){
-                console.log("Initiator");
-                //remove the old initiator
-                user.type = user_participant_type;// new user type
-                this.setUser( user );// update new type on user
-                delete roomInitiators[user.socket];
-                //pick the first user that is still inside the room
-                for ( let socket_id in users ) {
-                    let otheruser = users[socket_id];
-                    if(!otheruser.room) continue;
-                    if(otheruser.room == user.room && otheruser.room != lobbyRoomName) {
-                    if(otheruser.socket != user.socket && otheruser.type != user_initiator_type ) {
-                        firstUser = otheruser;
-                        continue;
-                    }
-                    }
-                }
-                if(firstUser) {
-                    firstUser.type = user_initiator_type;// set the new owner to initiator
-                    this.setUser( firstUser );// update new type of user
-                    console.log("firstUser:",firstUser);
-                    
-                    socket.broadcast.to( firstUser.socket ).emit('you-are-new-owner', firstUser );
-                    roomInitiators[firstUser.socket] = firstUser; // shift ownership
-                }
-                callback();
-            }else {
-                console.log("Not Initiator");
-                callback();
-            }
-            
+            callback();
         }
         else if ( this.get_room_users( user.room ) ) {
             // room exists...
@@ -343,15 +292,13 @@ class VideoCenterServer {
         //Test if room exist
         if ( this.is_room_exist( user.room )  ) {
             // room exist...
-            console.log("room exists. don't broadcast for room delete");
+            console.log("Room exists. Join the room");
         }
         else {
-            console.log("You are the initiator of the room");
+            console.log("Room doesn't exists. Create the room");
             if(user.room != lobbyRoomName )
             {
-                user.type = user_initiator_type;// new user type
-                this.setUser( user );// update new type on user
-                this.roomInitiators[user.socket] = user;
+                console.log("Creating new room:", newRoomname);
             }
         }
         socket.join( newRoomname );
@@ -362,7 +309,7 @@ class VideoCenterServer {
         let move_into_lobby = prevRoom == lobbyRoomName; // He was in another room and he joins 'lobby'. He is not refreshing browser, nor re-connected.
         let visit = ! prevRoom; // He access(visits) the chat page. He is not moving into room from other room. He may refresh browser, disconnected, or whatever.. he access the site again.
 
-        let my_room: string = !! prevRoom || newRoomname == lobbyRoomName ? Lobby : newRoomname;
+        let my_room: string = !! prevRoom || newRoomname == lobbyRoomName ? lobbyRoomName : newRoomname;
         let room: string = '';
 
         // @todo Case Z.
@@ -377,7 +324,7 @@ class VideoCenterServer {
             }
         }
         else if ( visit ) { // Maybe revisit, refresh, reconnect, first visit.
-            if ( my_room != Lobby ) {
+            if ( my_room != lobbyRoomName ) {
                 room = newRoomname; // Case 1.6
             }
         }

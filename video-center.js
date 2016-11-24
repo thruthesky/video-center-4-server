@@ -5,16 +5,13 @@
 /// import fs = require('fs');
 /// import oo = require('socket.io');
 var extend = require('extend');
-var user_participant_type = 'UserParticipant';
-var user_initiator_type = 'UserInitiator';
 var admin_type = 'Admin';
+var participant_type = 'Participant';
 var lobbyRoomName = 'Lobby';
-var Lobby = 'Lobby';
 var EmptyRoomname = '';
 var VideoCenterServer = (function () {
     function VideoCenterServer() {
         this.users = {};
-        this.roomInitiators = {};
         console.log("VideoCenterServer::constructor() ...");
         //initialize whiteboard
         this.whiteboard_line_history = new Array();
@@ -63,6 +60,10 @@ var VideoCenterServer = (function () {
         });
         socket.on('room-cast', function (data) {
             socket.broadcast.to(data.roomname).emit('room-cast', data);
+        });
+        socket.on('get-my-info', function (callback) {
+            var user = _this.getUser(socket);
+            callback(user);
         });
     };
     VideoCenterServer.prototype.whiteboard = function (socket, data) {
@@ -129,8 +130,8 @@ var VideoCenterServer = (function () {
     };
     VideoCenterServer.prototype.disconnect = function (socket) {
         var user = this.getUser(socket);
-        if (user.room != Lobby)
-            this.io.in(Lobby).emit('disconnect', user);
+        if (user.room != lobbyRoomName)
+            this.io.in(lobbyRoomName).emit('disconnect', user);
         this.io.in(user.room).emit('disconnect', user);
         this.io.sockets.emit('disconnect-private-message', user);
         this.leaveRoom(socket, function () { return console.log("You left and disconnect"); });
@@ -153,7 +154,7 @@ var VideoCenterServer = (function () {
         user.name = 'Anonymous';
         user.room = EmptyRoomname;
         user.socket = socket.id;
-        user.type = user_participant_type;
+        user.type = participant_type;
         this.users[socket.id] = user;
         return this.users[socket.id];
     };
@@ -175,16 +176,16 @@ var VideoCenterServer = (function () {
         user.type = admin_type;
         return this.setUser(user);
     };
-    VideoCenterServer.prototype.setClient = function (socket) {
+    VideoCenterServer.prototype.setParticipant = function (socket) {
         var user = this.getUser(socket);
-        user.type = user_participant_type;
+        user.type = participant_type;
         return this.setUser(user);
     };
     VideoCenterServer.prototype.updateUsername = function (socket, username, callback) {
         var user = this.getUser(socket);
         var oldusername = user.name;
         user = this.setUsername(socket, username);
-        this.setClient(socket);
+        this.setUser(socket);
         console.log(oldusername + " change it's name to " + username);
         console.log(user);
         callback(user);
@@ -208,70 +209,18 @@ var VideoCenterServer = (function () {
      */
     VideoCenterServer.prototype.createRoom = function (socket, roomname, callback) {
         var user = this.getUser(socket);
-        user.type = user_initiator_type; // new user type
-        this.setUser(user); // update new type on user
-        this.roomInitiators[user.socket] = user;
         console.log(user.name + ' created and joined :' + roomname);
         callback(roomname);
     };
     VideoCenterServer.prototype.leaveRoom = function (socket, callback) {
         var user = this.getUser(socket);
-        var users = this.users;
-        var roomInitiators = this.roomInitiators;
-        var isInitiator = false;
-        var firstUser;
         console.log(user.name + ' leave the room: ' + user.room);
         socket.leave(user.room);
         this.io.in(user.room).emit('remove-user', user);
         if (this.is_room_exist(user.room)) {
             // room exist...
             console.log("room exists. don't broadcast for room delete");
-            // Check if the one who leave is the initiator
-            console.log("test initiate");
-            for (var socket_id in roomInitiators) {
-                var userinitiate = roomInitiators[socket_id];
-                console.log("initiator:", userinitiate);
-                if (userinitiate.socket == user.socket) {
-                    console.log("You are the initiator");
-                    isInitiator = true;
-                }
-                else {
-                    console.log("You are not the initiator");
-                    isInitiator = false;
-                }
-            }
-            //If he is the initiator then pass it to another user that is still inside the room
-            if (isInitiator) {
-                console.log("Initiator");
-                //remove the old initiator
-                user.type = user_participant_type; // new user type
-                this.setUser(user); // update new type on user
-                delete roomInitiators[user.socket];
-                //pick the first user that is still inside the room
-                for (var socket_id in users) {
-                    var otheruser = users[socket_id];
-                    if (!otheruser.room)
-                        continue;
-                    if (otheruser.room == user.room && otheruser.room != lobbyRoomName) {
-                        if (otheruser.socket != user.socket && otheruser.type != user_initiator_type) {
-                            firstUser = otheruser;
-                            continue;
-                        }
-                    }
-                }
-                if (firstUser) {
-                    firstUser.type = user_initiator_type; // set the new owner to initiator
-                    this.setUser(firstUser); // update new type of user
-                    console.log("firstUser:", firstUser);
-                    socket.broadcast.to(firstUser.socket).emit('you-are-new-owner', firstUser);
-                    roomInitiators[firstUser.socket] = firstUser; // shift ownership
-                }
-                callback();
-            }
-            else {
-                console.log("Not Initiator");
-                callback();
-            }
+            callback();
         }
         else if (this.get_room_users(user.room)) {
             // room exists...
@@ -316,14 +265,12 @@ var VideoCenterServer = (function () {
         //Test if room exist
         if (this.is_room_exist(user.room)) {
             // room exist...
-            console.log("room exists. don't broadcast for room delete");
+            console.log("Room exists. Join the room");
         }
         else {
-            console.log("You are the initiator of the room");
+            console.log("Room doesn't exists. Create the room");
             if (user.room != lobbyRoomName) {
-                user.type = user_initiator_type; // new user type
-                this.setUser(user); // update new type on user
-                this.roomInitiators[user.socket] = user;
+                console.log("Creating new room:", newRoomname);
             }
         }
         socket.join(newRoomname);
@@ -332,7 +279,7 @@ var VideoCenterServer = (function () {
         var move_room = !!prevRoom; // He has prev room name. Meaning he was in room or lobby. He is moving into another room. he is not refreshing the browser.
         var move_into_lobby = prevRoom == lobbyRoomName; // He was in another room and he joins 'lobby'. He is not refreshing browser, nor re-connected.
         var visit = !prevRoom; // He access(visits) the chat page. He is not moving into room from other room. He may refresh browser, disconnected, or whatever.. he access the site again.
-        var my_room = !!prevRoom || newRoomname == lobbyRoomName ? Lobby : newRoomname;
+        var my_room = !!prevRoom || newRoomname == lobbyRoomName ? lobbyRoomName : newRoomname;
         var room = '';
         // @todo Case Z.
         this.io.in(lobbyRoomName).emit('join-room', user); // all the cases.
@@ -345,7 +292,7 @@ var VideoCenterServer = (function () {
             }
         }
         else if (visit) {
-            if (my_room != Lobby) {
+            if (my_room != lobbyRoomName) {
                 room = newRoomname; // Case 1.6
             }
         }
