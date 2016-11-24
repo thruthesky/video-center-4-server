@@ -268,6 +268,8 @@ class VideoCenterServer {
                 //remove the old initiator
                 user.type = user_participant_type;// new user type
                 this.setUser( user );// update new type on user
+
+
                 delete roomInitiators[user.socket];
                 //pick the first user that is still inside the room
                 for ( let socket_id in users ) {
